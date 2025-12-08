@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* Neobrutalist color palette */
+  --color-cream: #FFFEF0;
+  --color-lime: #E8FF8D;
+  --color-lavender: #C8B6FF;
+  --color-coral: #FF6B6B;
+  --color-cyan: #A8E6FF;
+  --color-mint: #7BF1A8;
+  --color-yellow: #FFDE59;
+
+  /* Typography */
+  --font-mono: 'Space Mono', 'Courier New', monospace;
+}
+
+/* Base styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  background-color: var(--color-cream);
+}
+
+/* Neobrutalist utilities */
+.shadow-brutal {
+  box-shadow: 8px 8px 0 #000;
+}
+
+.shadow-brutal-lg {
+  box-shadow: 12px 12px 0 #000;
+}
+
+.shadow-brutal-sm {
+  box-shadow: 4px 4px 0 #000;
+}
+
+.border-brutal {
+  border: 4px solid #000;
+}
+
+.border-brutal-thick {
+  border: 6px solid #000;
+}
+
+/* Button press effect */
+.btn-press:active {
+  transform: translate(3px, 3px);
+  box-shadow: 3px 3px 0 #000 !important;
+}
+
+/* Animations */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin 1s linear infinite;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-cream);
+  border: 2px solid #000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #000;
+}
+
+/* Textarea placeholder */
+textarea::placeholder {
+  color: #999;
+}
+
+/* Vertical text for OR divider */
+.writing-mode-vertical {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
