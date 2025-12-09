@@ -28,40 +28,8 @@ export function useWebSocket(): UseWebSocketReturn {
   // All refs declared together at the top
   const wsRef = useRef<WebSocket | null>(null);
   const resultsRef = useRef<ProcessResult[]>([]);
-  const pendingFilesRef = useRef<FileData[]>([]);
-  const currentFileIndexRef = useRef<number>(0);
-  const totalFilesRef = useRef<number>(0);
 
-  // Send next file in queue
-  const sendNextFile = useCallback(() => {
-    const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      console.error('[WS] Cannot send - connection not open');
-      return;
-    }
-
-    const index = currentFileIndexRef.current;
-    const files = pendingFilesRef.current;
-
-    if (index >= files.length) {
-      console.log('[WS] All files sent');
-      return;
-    }
-
-    const file = files[index];
-    console.log(`[WS] Sending file ${index + 1}/${files.length}: ${file.name}`);
-
-    const message = JSON.stringify({
-      type: 'process',
-      files: [file], // Send ONE file at a time
-      text: null,
-    });
-
-    console.log(`[WS] Message size: ${(message.length / 1024 / 1024).toFixed(2)} MB`);
-    ws.send(message);
-  }, []);
-
-  // Handle incoming messages
+  // Handle incoming messages - parallel processing version
   const handleMessage = useCallback((msg: ServerMessage) => {
     console.log('[WS] Received:', msg.type);
 
@@ -101,30 +69,18 @@ export function useWebSocket(): UseWebSocketReturn {
         break;
 
       case 'done':
-        // One file batch complete - send next file
-        currentFileIndexRef.current += 1;
-        const nextIndex = currentFileIndexRef.current;
-        const total = totalFilesRef.current;
+        // ALL files complete - backend sends this after all parallel tasks finish
+        console.log('[WS] All complete:', resultsRef.current.length, 'results');
+        setResults([...resultsRef.current]);
+        setIsProcessing(false);
 
-        console.log(`[WS] Batch done. ${nextIndex}/${total}`);
-
-        if (nextIndex < total) {
-          // More files - send next
-          sendNextFile();
-        } else {
-          // All done!
-          console.log('[WS] All complete:', resultsRef.current.length, 'results');
-          setResults([...resultsRef.current]);
-          setIsProcessing(false);
-
-          // Close connection
-          if (wsRef.current) {
-            wsRef.current.close(1000, 'Complete');
-          }
+        // Close connection
+        if (wsRef.current) {
+          wsRef.current.close(1000, 'Complete');
         }
         break;
     }
-  }, [sendNextFile]);
+  }, []);
 
   // Connect to WebSocket
   const connect = useCallback((): Promise<WebSocket> => {
@@ -169,15 +125,12 @@ export function useWebSocket(): UseWebSocketReturn {
     });
   }, [handleMessage]);
 
-  // Process multiple files (sent one at a time)
+  // Process multiple files in parallel
   const processFiles = useCallback(async (files: File[]) => {
     setError(null);
     setProgress([]);
     setResults([]);
     resultsRef.current = [];
-    pendingFilesRef.current = [];
-    currentFileIndexRef.current = 0;
-    totalFilesRef.current = files.length;
     setIsProcessing(true);
 
     // Initialize progress for all files
@@ -188,17 +141,34 @@ export function useWebSocket(): UseWebSocketReturn {
 
       // Convert all files to base64
       const fileData: FileData[] = await Promise.all(files.map(fileToFileData));
-      pendingFilesRef.current = fileData;
 
-      // Connect and send first file
-      await connect();
-      sendNextFile();
+      // Connect to WebSocket
+      const ws = await connect();
+
+      // 1. Send start message with file count
+      console.log('[WS] Sending start with count:', files.length);
+      ws.send(JSON.stringify({ type: 'start', count: files.length }));
+
+      // 2. Send all files immediately (one message per file, but all at once)
+      for (const file of fileData) {
+        console.log(`[WS] Sending file: ${file.name}`);
+        ws.send(JSON.stringify({
+          type: 'process',
+          files: [file],
+          text: null,
+        }));
+      }
+
+      // 3. Send end signal - backend will process all in parallel and respond with 'done' when ALL complete
+      console.log('[WS] Sending end signal');
+      ws.send(JSON.stringify({ type: 'end' }));
+
     } catch (e) {
       console.error('[WS] Error:', e);
       setIsProcessing(false);
       setError('FAILED TO PROCESS. TRY AGAIN.');
     }
-  }, [connect, sendNextFile]);
+  }, [connect]);
 
   // Process text
   const processText = useCallback(async (text: string) => {
@@ -206,16 +176,17 @@ export function useWebSocket(): UseWebSocketReturn {
     setProgress([]);
     setResults([]);
     resultsRef.current = [];
-    pendingFilesRef.current = [];
-    currentFileIndexRef.current = 0;
-    totalFilesRef.current = 1;
     setIsProcessing(true);
 
     setProgress([{ name: 'pasted_text', percent: 0, status: 'QUEUED' }]);
 
     try {
       const ws = await connect();
+
+      // Use same protocol: start -> process -> end
+      ws.send(JSON.stringify({ type: 'start', count: 1 }));
       ws.send(JSON.stringify({ type: 'process', files: [], text }));
+      ws.send(JSON.stringify({ type: 'end' }));
     } catch (e) {
       console.error('[WS] Error:', e);
       setIsProcessing(false);
@@ -230,9 +201,6 @@ export function useWebSocket(): UseWebSocketReturn {
       wsRef.current = null;
     }
 
-    pendingFilesRef.current = [];
-    currentFileIndexRef.current = 0;
-    totalFilesRef.current = 0;
     resultsRef.current = [];
     setIsConnected(false);
     setIsProcessing(false);

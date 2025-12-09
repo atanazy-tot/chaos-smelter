@@ -1,5 +1,6 @@
 """WebSocket endpoint for file processing with progress streaming."""
 
+import asyncio
 import base64
 import json
 import logging
@@ -15,7 +16,7 @@ from ..services.audio import is_audio_file, transcribe_audio
 from ..services.synthesis import synthesize_text
 from ..services.text import decode_text_file, is_text_file
 
-# Configure logging to actually show our logs
+# Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -36,53 +37,57 @@ class FileInput:
     mime: str
 
 
-@dataclass
-class ProcessMessage:
-    """Incoming process request."""
-
-    type: str
-    files: list[FileInput]
-    text: Optional[str]
-
-
 class ProgressReporter:
     """Helper to send progress updates over WebSocket."""
 
     def __init__(self, websocket: WebSocket, filename: str):
         self.websocket = websocket
         self.filename = filename
+        self._lock = asyncio.Lock()
 
     async def report(self, percent: int, status: str):
         """Send progress update."""
-        await self.websocket.send_json(
-            {
-                "type": "progress",
-                "file": self.filename,
-                "percent": percent,
-                "status": status,
-            }
-        )
+        async with self._lock:
+            try:
+                await self.websocket.send_json(
+                    {
+                        "type": "progress",
+                        "file": self.filename,
+                        "percent": percent,
+                        "status": status,
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Failed to send progress: {e}")
 
     async def complete(self, content: str):
         """Send completion message."""
-        await self.websocket.send_json(
-            {
-                "type": "complete",
-                "file": self.filename,
-                "content": content,
-            }
-        )
+        async with self._lock:
+            try:
+                await self.websocket.send_json(
+                    {
+                        "type": "complete",
+                        "file": self.filename,
+                        "content": content,
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Failed to send complete: {e}")
 
     async def error(self, error: SmeltError):
         """Send error message."""
-        await self.websocket.send_json(
-            {
-                "type": "error",
-                "file": self.filename,
-                "message": error.message,
-                "code": error.code.value,
-            }
-        )
+        async with self._lock:
+            try:
+                await self.websocket.send_json(
+                    {
+                        "type": "error",
+                        "file": self.filename,
+                        "message": error.message,
+                        "code": error.code.value,
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Failed to send error: {e}")
 
 
 async def process_file(
@@ -96,7 +101,9 @@ async def process_file(
         await reporter.report(10, "VALIDATING...")
 
         if not is_audio_file(file.name) and not is_text_file(file.name):
-            raise UnsupportedFormatError(extension=file.name.split(".")[-1] if "." in file.name else "unknown")
+            raise UnsupportedFormatError(
+                extension=file.name.split(".")[-1] if "." in file.name else "unknown"
+            )
 
         # 20% - Decode base64
         await reporter.report(20, "DECODING...")
@@ -120,29 +127,16 @@ async def process_file(
 
         # Process based on type
         if is_audio_file(file.name):
-            # 30% - Start transcription
             await reporter.report(30, "TRANSCRIBING...")
-
-            # Transcription (30-70%)
             transcript = await transcribe_audio(file_bytes, file.name)
 
-            # 70% - Start synthesis
             await reporter.report(70, "SYNTHESIZING...")
-
-            # Synthesize the transcript
             result = await synthesize_text(transcript)
-
         else:
-            # Text file
             await reporter.report(40, "READING...")
-
-            # Decode text
             raw_text = decode_text_file(file_bytes, file.name)
 
-            # 60% - Start synthesis
             await reporter.report(60, "SYNTHESIZING...")
-
-            # Synthesize
             result = await synthesize_text(raw_text)
 
         # 100% - Complete
@@ -163,15 +157,11 @@ async def process_file(
         )
 
 
-async def process_text(
-    text: str,
-    websocket: WebSocket,
-) -> None:
+async def process_text(text: str, websocket: WebSocket) -> None:
     """Process pasted text with progress reporting."""
     reporter = ProgressReporter(websocket, "pasted_text")
 
     try:
-        # 20% - Validating
         await reporter.report(20, "READING...")
 
         if not text.strip():
@@ -180,12 +170,9 @@ async def process_text(
                 message="NOTHING TO PROCESS. TYPE SOMETHING.",
             )
 
-        # 50% - Synthesizing
         await reporter.report(50, "SYNTHESIZING...")
-
         result = await synthesize_text(text)
 
-        # 100% - Complete
         await reporter.report(100, "DONE")
         await reporter.complete(result)
 
@@ -203,6 +190,67 @@ async def process_text(
         )
 
 
+class ProcessingSession:
+    """Manages parallel file processing for a WebSocket session."""
+
+    def __init__(self, websocket: WebSocket, max_size_bytes: int):
+        self.websocket = websocket
+        self.max_size_bytes = max_size_bytes
+        self.tasks: list[asyncio.Task] = []
+        self.expected_count: int = 0
+        self.completed_count: int = 0
+        self._lock = asyncio.Lock()
+        self._done_event = asyncio.Event()
+
+    async def add_file(self, file: FileInput):
+        """Add a file to be processed in parallel."""
+        reporter = ProgressReporter(self.websocket, file.name)
+        task = asyncio.create_task(self._process_and_track(file, reporter))
+        self.tasks.append(task)
+        logger.info(f"Started task for {file.name}, total tasks: {len(self.tasks)}")
+
+    async def add_text(self, text: str):
+        """Add text to be processed."""
+        task = asyncio.create_task(self._process_text_and_track(text))
+        self.tasks.append(task)
+
+    async def _process_and_track(self, file: FileInput, reporter: ProgressReporter):
+        """Process file and track completion."""
+        try:
+            await process_file(file, reporter, self.max_size_bytes)
+        finally:
+            async with self._lock:
+                self.completed_count += 1
+                logger.info(f"Completed {file.name}: {self.completed_count}/{self.expected_count}")
+                if self.completed_count >= self.expected_count:
+                    self._done_event.set()
+
+    async def _process_text_and_track(self, text: str):
+        """Process text and track completion."""
+        try:
+            await process_text(text, self.websocket)
+        finally:
+            async with self._lock:
+                self.completed_count += 1
+                if self.completed_count >= self.expected_count:
+                    self._done_event.set()
+
+    async def wait_for_all(self, timeout: float = 600):
+        """Wait for all tasks to complete."""
+        try:
+            await asyncio.wait_for(self._done_event.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.error("Processing timed out")
+            # Cancel remaining tasks
+            for task in self.tasks:
+                if not task.done():
+                    task.cancel()
+
+    def is_done(self) -> bool:
+        """Check if all expected files have been processed."""
+        return self.completed_count >= self.expected_count and self.expected_count > 0
+
+
 @router.websocket("/ws/process")
 async def websocket_process(websocket: WebSocket):
     """WebSocket endpoint for processing files and text."""
@@ -212,22 +260,22 @@ async def websocket_process(websocket: WebSocket):
 
     logger.info("WebSocket connection established")
 
+    session: Optional[ProcessingSession] = None
+
     try:
         while True:
-            # Receive message
-            logger.debug("Waiting for WebSocket message...")
+            logger.debug("Waiting for message...")
             try:
                 raw_data = await websocket.receive_text()
-                logger.info(f"Received message, length: {len(raw_data)} bytes")
+                logger.info(f"Received message: {len(raw_data)} bytes")
             except Exception as e:
-                logger.error(f"Error receiving message: {type(e).__name__}: {e}")
+                logger.error(f"Error receiving: {type(e).__name__}: {e}")
                 raise
 
             try:
                 data = json.loads(raw_data)
-                logger.debug(f"Parsed JSON successfully, type: {data.get('type')}")
             except json.JSONDecodeError as e:
-                logger.error(f"JSON decode error: {e}")
+                logger.error(f"JSON error: {e}")
                 await websocket.send_json(
                     {
                         "type": "error",
@@ -240,59 +288,63 @@ async def websocket_process(websocket: WebSocket):
 
             msg_type = data.get("type")
 
-            if msg_type != "process":
-                logger.warning(f"Unknown message type: {msg_type}")
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "file": "unknown",
-                        "message": f"UNKNOWN COMMAND: {msg_type}",
-                        "code": ErrorCode.UNKNOWN.value,
-                    }
-                )
+            if msg_type == "start":
+                # Client signals how many files to expect
+                expected = data.get("count", 0)
+                session = ProcessingSession(websocket, max_size_bytes)
+                session.expected_count = expected
+                logger.info(f"Started session expecting {expected} files")
                 continue
 
-            # Process files
-            files = data.get("files", [])
-            text = data.get("text")
+            if msg_type == "process":
+                # Create session if not exists (single file mode or text)
+                if session is None:
+                    session = ProcessingSession(websocket, max_size_bytes)
 
-            logger.info(f"Processing request: {len(files)} files, text: {bool(text)}")
+                files = data.get("files", [])
+                text = data.get("text")
 
-            if files:
-                for i, file_data in enumerate(files):
-                    file = FileInput(
-                        name=file_data.get("name", "unknown"),
-                        data=file_data.get("data", ""),
-                        mime=file_data.get("mime", ""),
-                    )
-                    logger.info(f"Processing file {i+1}/{len(files)}: {file.name} ({len(file.data)} base64 chars)")
-                    reporter = ProgressReporter(websocket, file.name)
-                    await process_file(file, reporter, max_size_bytes)
+                if files:
+                    for file_data in files:
+                        file = FileInput(
+                            name=file_data.get("name", "unknown"),
+                            data=file_data.get("data", ""),
+                            mime=file_data.get("mime", ""),
+                        )
+                        logger.info(f"Queuing file: {file.name}")
+                        await session.add_file(file)
 
-            elif text:
-                logger.info(f"Processing text: {len(text)} characters")
-                await process_text(text, websocket)
+                elif text:
+                    logger.info(f"Processing text: {len(text)} chars")
+                    await session.add_text(text)
 
-            else:
-                logger.warning("No files or text in request")
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "file": "unknown",
-                        "message": "NOTHING TO DO. SEND FILES OR TEXT.",
-                        "code": ErrorCode.UNKNOWN.value,
-                    }
-                )
+                # Check if this was a single-batch request (no "start" message)
+                # or if we've received all expected files
+                if session.expected_count == 0:
+                    # Single batch mode - wait for this batch
+                    session.expected_count = len(files) if files else 1
+
                 continue
 
-            # Signal all processing complete
-            logger.info("All processing complete, sending done")
-            await websocket.send_json({"type": "done"})
+            if msg_type == "end":
+                # Client signals all files sent, wait for completion
+                if session:
+                    logger.info("Received end signal, waiting for tasks...")
+                    await session.wait_for_all()
+                    logger.info("All tasks complete, sending done")
+                    await websocket.send_json({"type": "done"})
+                    session = None
+                continue
+
+            logger.warning(f"Unknown message type: {msg_type}")
 
     except WebSocketDisconnect:
-        logger.info("WebSocket disconnected by client")
+        logger.info("WebSocket disconnected")
+        if session:
+            for task in session.tasks:
+                task.cancel()
     except Exception as e:
-        logger.exception(f"WebSocket error: {type(e).__name__}: {e}")
+        logger.exception(f"WebSocket error: {e}")
         try:
             await websocket.send_json(
                 {
