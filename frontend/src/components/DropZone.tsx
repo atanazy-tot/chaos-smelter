@@ -83,7 +83,7 @@ export function DropZone({ files, onFilesChange, isActive }: DropZoneProps) {
       onDrop={handleDrop}
       onClick={() => inputRef.current?.click()}
       className={`
-        flex-1 min-w-[400px] min-h-[320px]
+        flex-1 min-w-full md:min-w-[400px] min-h-[320px]
         ${bgColor} border-brutal-thick p-12
         flex flex-col justify-center items-center
         cursor-pointer transition-all duration-150

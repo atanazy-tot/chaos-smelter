@@ -14,7 +14,7 @@ export function TextZone({ text, onTextChange, isActive }: TextZoneProps) {
   return (
     <div
       className={`
-        flex-1 min-w-[400px] min-h-[320px]
+        flex-1 min-w-full md:min-w-[400px] min-h-[320px]
         ${bgColor} border-brutal-thick p-8
         flex flex-col transition-all duration-150
         ${shadow}
