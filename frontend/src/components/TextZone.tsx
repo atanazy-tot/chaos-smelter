@@ -1,4 +1,4 @@
-import { Icons } from './Icons';
+import { ClipboardText } from '@phosphor-icons/react';
 
 interface TextZoneProps {
   text: string;
@@ -21,7 +21,7 @@ export function TextZone({ text, onTextChange, isActive }: TextZoneProps) {
       `}
     >
       <div className="flex items-center gap-4 mb-4">
-        {Icons.paste}
+        <ClipboardText size={64} weight="duotone" />
         <div>
           <h2 className="text-2xl font-bold uppercase tracking-tight">
             PASTE TEXT

@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { Copy, DownloadSimple, CaretLeft, CaretRight } from '@phosphor-icons/react';
 import type { ProcessResult } from '../types';
-import { Icons } from './Icons';
 
 interface ResultsViewProps {
   results: ProcessResult[];
@@ -57,7 +57,7 @@ export function ResultsView({ results, onReset }: ResultsViewProps) {
             onClick={copyToClipboard}
             className="bg-cream border-brutal px-6 py-3 text-sm font-bold uppercase shadow-brutal-sm btn-press flex items-center gap-2"
           >
-            {Icons.copy}
+            <Copy size={20} weight="bold" />
             {copied ? 'COPIED!' : 'COPY'}
           </button>
 
@@ -65,7 +65,7 @@ export function ResultsView({ results, onReset }: ResultsViewProps) {
             onClick={downloadFile}
             className="bg-cyan border-brutal px-6 py-3 text-sm font-bold uppercase shadow-brutal-sm btn-press flex items-center gap-2"
           >
-            {Icons.download}
+            <DownloadSimple size={20} weight="bold" />
             DOWNLOAD
           </button>
 
@@ -97,7 +97,7 @@ export function ResultsView({ results, onReset }: ResultsViewProps) {
               currentIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'btn-press'
             }`}
           >
-            {Icons.arrowLeft}
+            <CaretLeft size={32} weight="bold" />
           </button>
 
           <div className="text-center">
@@ -116,7 +116,7 @@ export function ResultsView({ results, onReset }: ResultsViewProps) {
               currentIndex === results.length - 1 ? 'opacity-30 cursor-not-allowed' : 'btn-press'
             }`}
           >
-            {Icons.arrowRight}
+            <CaretRight size={32} weight="bold" />
           </button>
         </div>
       )}

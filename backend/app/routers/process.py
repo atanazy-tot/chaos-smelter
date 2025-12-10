@@ -14,7 +14,6 @@ from ..config import get_settings
 from ..errors import ErrorCode, FileTooLargeError, SmeltError, UnsupportedFormatError
 from ..services.audio import is_audio_file, transcribe_audio
 from ..services.synthesis import synthesize_text
-from ..services.text import decode_text_file, is_text_file
 
 # Configure logging
 logging.basicConfig(
@@ -95,12 +94,12 @@ async def process_file(
     reporter: ProgressReporter,
     max_size_bytes: int,
 ) -> None:
-    """Process a single file with progress reporting."""
+    """Process a single audio file with progress reporting."""
     try:
         # 10% - Validate format
         await reporter.report(10, "VALIDATING...")
 
-        if not is_audio_file(file.name) and not is_text_file(file.name):
+        if not is_audio_file(file.name):
             raise UnsupportedFormatError(
                 extension=file.name.split(".")[-1] if "." in file.name else "unknown"
             )
@@ -125,19 +124,12 @@ async def process_file(
                 actual_size_mb=actual_size / (1024 * 1024),
             )
 
-        # Process based on type
-        if is_audio_file(file.name):
-            await reporter.report(30, "TRANSCRIBING...")
-            transcript = await transcribe_audio(file_bytes, file.name)
+        # Process audio file
+        await reporter.report(30, "TRANSCRIBING...")
+        transcript = await transcribe_audio(file_bytes, file.name)
 
-            await reporter.report(70, "SYNTHESIZING...")
-            result = await synthesize_text(transcript)
-        else:
-            await reporter.report(40, "READING...")
-            raw_text = decode_text_file(file_bytes, file.name)
-
-            await reporter.report(60, "SYNTHESIZING...")
-            result = await synthesize_text(raw_text)
+        await reporter.report(70, "SYNTHESIZING...")
+        result = await synthesize_text(transcript)
 
         # 100% - Complete
         await reporter.report(100, "DONE")

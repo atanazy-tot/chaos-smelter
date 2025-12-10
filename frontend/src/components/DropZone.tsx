@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Icons } from './Icons';
+import { Waveform } from '@phosphor-icons/react';
 import { MAX_FILE_SIZE, MAX_FILE_COUNT, isSupportedFile } from '../types';
 
 interface DropZoneProps {
@@ -94,22 +94,22 @@ export function DropZone({ files, onFilesChange, isActive }: DropZoneProps) {
       <input
         ref={inputRef}
         type="file"
-        accept=".txt,.md,.mp3,.wav,.m4a,.ogg"
+        accept=".mp3,.wav,.m4a,.ogg"
         multiple
         onChange={handleFileSelect}
         className="hidden"
       />
 
       <div className="mb-6">
-        {isDragging ? Icons.drop : (files.length > 1 ? Icons.files : Icons.file)}
+        <Waveform size={64} weight={isDragging ? "fill" : "duotone"} />
       </div>
 
       <h2 className="text-2xl font-bold uppercase tracking-tight mb-3">
-        {isDragging ? 'RELEASE!' : files.length > 0 ? `${files.length} FILE${files.length > 1 ? 'S' : ''}` : 'DROP FILES'}
+        {isDragging ? 'RELEASE!' : files.length > 0 ? `${files.length} AUDIO${files.length > 1 ? 'S' : ''}` : 'DROP AUDIO'}
       </h2>
 
       <p className="text-sm text-gray-600">
-        {files.length > 0 ? 'Click to add more' : '.TXT / .MD / .MP3 / .WAV / .M4A / .OGG'}
+        {files.length > 0 ? 'Click to add more' : '.MP3 / .WAV / .M4A / .OGG'}
       </p>
 
       {error && (

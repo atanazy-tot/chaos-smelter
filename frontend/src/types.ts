@@ -61,21 +61,19 @@ export const MAX_FILE_SIZE = 5 * 1024 * 1024;
 /** Maximum number of files */
 export const MAX_FILE_COUNT = 10;
 
-/** Supported file extensions */
-export const SUPPORTED_EXTENSIONS = ['.txt', '.md', '.mp3', '.wav', '.m4a', '.ogg'];
+/** Supported audio extensions */
+export const SUPPORTED_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.ogg'];
 
-/** Check if file extension is supported */
+/** Check if file is a supported audio format */
 export function isSupportedFile(filename: string): boolean {
   const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'));
   return SUPPORTED_EXTENSIONS.includes(ext);
 }
 
-/** Get MIME type for file */
+/** Get MIME type for audio file */
 export function getMimeType(filename: string): string {
   const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'));
   const mimeTypes: Record<string, string> = {
-    '.txt': 'text/plain',
-    '.md': 'text/markdown',
     '.mp3': 'audio/mpeg',
     '.wav': 'audio/wav',
     '.m4a': 'audio/mp4',
