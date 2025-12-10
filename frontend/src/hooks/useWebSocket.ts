@@ -28,6 +28,7 @@ export function useWebSocket(): UseWebSocketReturn {
   // All refs declared together at the top
   const wsRef = useRef<WebSocket | null>(null);
   const resultsRef = useRef<ProcessResult[]>([]);
+  const progressRef = useRef<FileProgress[]>([]);
 
   // Handle incoming messages - parallel processing version
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -35,11 +36,13 @@ export function useWebSocket(): UseWebSocketReturn {
 
     switch (msg.type) {
       case 'progress':
-        setProgress((prev) =>
-          prev.map((p) =>
+        setProgress((prev) => {
+          const updated = prev.map((p) =>
             p.name === msg.file ? { ...p, percent: msg.percent, status: msg.status } : p
-          )
-        );
+          );
+          progressRef.current = updated;
+          return updated;
+        });
         break;
 
       case 'complete': {
@@ -61,24 +64,37 @@ export function useWebSocket(): UseWebSocketReturn {
 
       case 'error':
         console.error('[WS] Error:', msg.file, msg.message);
-        setProgress((prev) =>
-          prev.map((p) =>
-            p.name === msg.file ? { ...p, error: msg.message } : p
-          )
-        );
+        setProgress((prev) => {
+          const updated = prev.map((p) =>
+            p.name === msg.file ? { ...p, percent: 100, error: msg.message } : p
+          );
+          progressRef.current = updated;
+          return updated;
+        });
         break;
 
-      case 'done':
+      case 'done': {
         // ALL files complete - backend sends this after all parallel tasks finish
         console.log('[WS] All complete:', resultsRef.current.length, 'results');
         setResults([...resultsRef.current]);
         setIsProcessing(false);
+
+        // Check if there were any errors
+        const errors = progressRef.current.filter((p) => p.error);
+        if (errors.length > 0 && resultsRef.current.length === 0) {
+          // All files failed - show the first error
+          setError(errors[0].error || 'PROCESSING FAILED. TRY AGAIN.');
+        } else if (errors.length > 0) {
+          // Some files failed
+          setError(`${errors.length} FILE(S) FAILED. CHECK RESULTS.`);
+        }
 
         // Close connection
         if (wsRef.current) {
           wsRef.current.close(1000, 'Complete');
         }
         break;
+      }
     }
   }, []);
 
@@ -130,10 +146,13 @@ export function useWebSocket(): UseWebSocketReturn {
     setProgress([]);
     setResults([]);
     resultsRef.current = [];
+    progressRef.current = [];
     setIsProcessing(true);
 
     // Initialize progress for all files
-    setProgress(files.map((f) => ({ name: f.name, percent: 0, status: 'QUEUED' })));
+    const initialProgress = files.map((f) => ({ name: f.name, percent: 0, status: 'QUEUED' }));
+    setProgress(initialProgress);
+    progressRef.current = initialProgress;
 
     try {
       console.log('[WS] Converting', files.length, 'files...');
@@ -175,9 +194,12 @@ export function useWebSocket(): UseWebSocketReturn {
     setProgress([]);
     setResults([]);
     resultsRef.current = [];
+    progressRef.current = [];
     setIsProcessing(true);
 
-    setProgress([{ name: 'pasted_text', percent: 0, status: 'QUEUED' }]);
+    const initialProgress = [{ name: 'pasted_text', percent: 0, status: 'QUEUED' }];
+    setProgress(initialProgress);
+    progressRef.current = initialProgress;
 
     try {
       const ws = await connect();
@@ -201,6 +223,7 @@ export function useWebSocket(): UseWebSocketReturn {
     }
 
     resultsRef.current = [];
+    progressRef.current = [];
     setIsConnected(false);
     setIsProcessing(false);
     setProgress([]);
