@@ -16,6 +16,8 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+    networks:
+      - smelt-network
 
   frontend:
     build:
@@ -27,3 +29,9 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - smelt-network
+
+networks:
+  smelt-network:
+    driver: bridge
