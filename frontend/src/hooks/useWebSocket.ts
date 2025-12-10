@@ -86,9 +86,8 @@ export function useWebSocket(): UseWebSocketReturn {
   const connect = useCallback((): Promise<WebSocket> => {
     return new Promise((resolve, reject) => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = import.meta.env.DEV
-        ? 'ws://localhost:8000/ws/process'
-        : `${protocol}//${window.location.host}/ws/process`;
+      const host = import.meta.env.DEV ? 'localhost:8000' : window.location.host;
+      const wsUrl = `${protocol}//${host}/ws/process`;
 
       console.log('[WS] Connecting:', wsUrl);
       const ws = new WebSocket(wsUrl);
