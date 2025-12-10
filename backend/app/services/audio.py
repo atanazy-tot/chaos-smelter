@@ -31,13 +31,17 @@ TRANSCRIPTION_PROMPT = """Transcribe this audio accurately.
 RULES:
 1. Auto-detect the language of the audio
 2. Output the transcription in the SAME language as the audio
-3. Format the output as clean markdown
-4. Use ## headers to divide into logical sections by topic
-5. If multiple speakers, indicate speaker changes with bold text
-6. Remove filler words (um, uh, etc.) but preserve meaning
-7. Fix obvious grammar issues while preserving the speaker's voice
+3. Format as clean markdown transcript
+4. Speaker detection:
+   - If names are mentioned or identifiable, use: **John:** sentence
+   - If unknown, use: **Speaker 1:** sentence, **Speaker 2:** sentence, etc.
+   - Each speaker's line on a new line
+5. Remove filler words (um, uh, etc.) but preserve meaning
+6. Fix obvious grammar issues while preserving the speaker's voice
+7. Do NOT summarize, do NOT add action points, do NOT add headers or sections
+8. Just output a clean, verbatim transcript with speaker labels
 
-Output only the transcription, no commentary."""
+Output only the transcript, no commentary."""
 
 
 def get_audio_format(filename: str) -> str | None:
