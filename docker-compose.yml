@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL_TRANSCRIPTION=${OPENROUTER_MODEL_TRANSCRIPTION:-google/gemini-2.5-pro-preview}
+      - OPENROUTER_MODEL_SYNTHESIS=${OPENROUTER_MODEL_SYNTHESIS:-google/gemini-2.5-pro-preview}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-25}
+      - CORS_ORIGINS=["http://localhost","http://frontend"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
