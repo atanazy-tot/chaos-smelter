@@ -53,14 +53,15 @@ export function ProcessButton({
         disabled={isProcessing || !canProcess}
         className={`
           ${isProcessing ? 'bg-gray-600' : canProcess ? 'bg-black' : 'bg-gray-400'}
-          text-cream border-none px-16 py-6
-          text-xl font-bold uppercase tracking-widest
+          text-cream border-none px-8 md:px-16 py-4 md:py-6
+          text-base md:text-xl font-bold uppercase tracking-widest
           ${isProcessing || !canProcess ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
           shadow-brutal btn-press transition-all duration-100
+          whitespace-nowrap
         `}
       >
         {isProcessing ? (
-          <span className="flex items-center gap-3">
+          <span className="flex items-center gap-2 md:gap-3">
             <span className="animate-spin-slow inline-block">@</span>
             PROCESSING...
           </span>

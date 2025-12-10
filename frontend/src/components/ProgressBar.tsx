@@ -10,25 +10,27 @@ function ProgressBlocks({ percent, status, error }: { percent: number; status: s
   const filled = Math.floor(percent / 10);
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex gap-0.5">
-        {Array.from({ length: blocks }).map((_, i) => (
-          <div
-            key={i}
-            className={`w-4 h-6 border-2 border-black transition-colors duration-150 ${
-              i < filled
-                ? error
-                  ? 'bg-coral'
-                  : percent === 100
-                  ? 'bg-mint'
-                  : 'bg-lime'
-                : 'bg-cream'
-            }`}
-          />
-        ))}
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <div className="flex gap-0.5">
+          {Array.from({ length: blocks }).map((_, i) => (
+            <div
+              key={i}
+              className={`w-3 md:w-4 h-5 md:h-6 border-2 border-black transition-colors duration-150 ${
+                i < filled
+                  ? error
+                    ? 'bg-coral'
+                    : percent === 100
+                    ? 'bg-mint'
+                    : 'bg-lime'
+                  : 'bg-cream'
+              }`}
+            />
+          ))}
+        </div>
+        <span className="text-sm font-bold w-12">{percent}%</span>
       </div>
-      <span className="text-sm font-bold w-12">{percent}%</span>
-      <span className={`text-xs uppercase tracking-wider ${error ? 'text-coral' : 'text-gray-600'}`}>
+      <span className={`text-xs uppercase tracking-wider truncate ${error ? 'text-coral' : 'text-gray-600'}`}>
         {error || status}
       </span>
     </div>
